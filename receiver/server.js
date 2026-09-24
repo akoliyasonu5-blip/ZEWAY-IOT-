@@ -3,6 +3,13 @@ const tcpPort=Number(process.env.TCP_PORT||7008),httpPort=Number(process.env.POR
 const devices=new Map(),history=new Map(),tripTracker=new TripTracker(),MAX_FRAME=4096;let serial=0;const fence=(process.env.GEOFENCE||'').split(',').map(Number);if(fence.length===3)tripTracker.setGeofence(...fence);
 const sbUrl=process.env.SUPABASE_URL?.replace(/\/$/,'');
 const sbSecret=process.env.SUPABASE_SECRET_KEY;
+function validPosition(body){
+ const id=String(body.device_id??body.id??'');
+ const lat=Number(body.lat),lng=Number(body.lng),speed=body.speed==null?0:Number(body.speed);
+ const timestamp=body.recorded_at??body.timestamp??new Date().toISOString();
+ if(!allowed.has(id)||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180||(lat===0&&lng===0)||!Number.isFinite(speed)||speed<0||speed>500||!Number.isFinite(Date.parse(timestamp)))return null;
+ return {id,lat,lng,speed,timestamp:new Date(timestamp).toISOString(),voltage:body.voltage==null?null:Number(body.voltage),ignition:body.ignition==null?null:!!body.ignition};
+}
 async function publishPosition(pos){
  if(!sbUrl||!sbSecret)return;
  try{
@@ -75,4 +82,6 @@ if(process.env.UDP_PORT){
  udp.on('error',err=>console.warn('UDP receiver:',err.message));
  udp.bind(udpPort,'0.0.0.0',()=>console.log('JT808 UDP receiver on',udpPort));
 }
-http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');res.setHeader('Access-Control-Allow-Origin',process.env.DASHBOARD_ORIGIN||'https://zeway-iot-fleet-tracking.akoliyasonu5.chatgpt.site');res.setHeader('Access-Control-Allow-Headers','Authorization');if(req.method==='OPTIONS'){res.writeHead(204).end();return}if(req.url==='/health'){res.end(JSON.stringify({ok:true}));return}if(req.headers.authorization!==`Bearer ${token}`){res.writeHead(401).end(JSON.stringify({error:'Unauthorized'}));return}if(req.url==='/api/devices'){res.end(JSON.stringify({devices:[...devices.values()],trips:tripTracker.getTrips(),alerts:tripTracker.getAlerts()}));return}if(req.url?.startsWith('/api/history/')){const id=decodeURIComponent(req.url.slice('/api/history/'.length));if(!allowed.has(id)){res.writeHead(404).end(JSON.stringify({error:'Unknown device'}));return}res.end(JSON.stringify({positions:history.get(id)||[]}));return}res.writeHead(404).end(JSON.stringify({error:'Not found'}))}).listen(httpPort,'0.0.0.0',()=>console.log('HTTP API on',httpPort));
+http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');res.setHeader('Access-Control-Allow-Origin',process.env.DASHBOARD_ORIGIN||'https://akoliyasonu5-blip.github.io');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');if(req.method==='OPTIONS'){res.writeHead(204).end();return}if(req.url==='/health'){res.end(JSON.stringify({ok:true}));return}if(req.headers.authorization!==`Bearer ${token}`){res.writeHead(401).end(JSON.stringify({error:'Unauthorized'}));return}if(req.url==='/api/positions'&&req.method==='POST'){
+ let raw='';req.on('data',chunk=>{raw+=chunk;if(raw.length>8192)req.destroy()});req.on('end',()=>{let body;try{body=JSON.parse(raw)}catch{res.writeHead(400).end(JSON.stringify({error:'Invalid JSON'}));return}const pos=validPosition(body);if(!pos){res.writeHead(400).end(JSON.stringify({error:'Unknown device or invalid GPS position'}));return}devices.set(pos.id,pos);tripTracker.record(pos);const list=history.get(pos.id)||[];list.push(pos);history.set(pos.id,list.slice(-1000));void publishPosition(pos);res.writeHead(202).end(JSON.stringify({accepted:true,device_id:pos.id}))});return}
+ if(req.url==='/api/devices'){res.end(JSON.stringify({devices:[...devices.values()],trips:tripTracker.getTrips(),alerts:tripTracker.getAlerts()}));return}if(req.url?.startsWith('/api/history/')){const id=decodeURIComponent(req.url.slice('/api/history/'.length));if(!allowed.has(id)){res.writeHead(404).end(JSON.stringify({error:'Unknown device'}));return}res.end(JSON.stringify({positions:history.get(id)||[]}));return}res.writeHead(404).end(JSON.stringify({error:'Not found'}))}).listen(httpPort,'0.0.0.0',()=>console.log('HTTP API on',httpPort));

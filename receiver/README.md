@@ -1,6 +1,6 @@
-# ZEWAY MT100 receiver (JT/T 808 mode)
+# ZEWAY receiver (JT/T 808 mode and JSON GPS)
 
-The supplied Kingwo IoT MT100 manual identifies three switchable modes: Kingwo, JT808, GT800. This service implements the **JT/T 808 basic location packet** (0x0200), registration (0x0100), authentication (0x0102), heartbeat (0x0002), and general responses (0x8001). It accepts 2013 (12-digit) and 2019 (20-digit) terminal headers, but does not support fragmented packets, multimedia, or remote control. No scooter lock/unlock action is implemented.
+A previously supplied Kingwo IoT MT100 manual identifies three switchable modes: Kingwo, JT808, GT800. **A separately supplied TrackingTheWorld MT-100 datasheet instead identifies @Track. This JT/T 808 decoder is not compatible with @Track without a new adapter. Verify the exact installed hardware and protocol before configuring it.** This service implements the **JT/T 808 basic location packet** (0x0200), registration (0x0100), authentication (0x0102), heartbeat (0x0002), and general responses (0x8001). It accepts 2013 (12-digit) and 2019 (20-digit) terminal headers, but does not support fragmented packets, multimedia, or remote control. No scooter lock/unlock action is implemented.
 
 ## Run
 
@@ -12,7 +12,7 @@ API_TOKEN='choose-a-long-random-secret' TERMINAL_IDS='YOUR_12_DIGIT_JT808_TERMIN
 
 Set `TERMINAL_IDS` to the 12- or 20-digit terminal identity used in JT808 messages, which may be different from the 15-digit IMEI printed on the device. The dashboard needs `https://YOUR_HOST/api/devices` and the same API token. The server creates trip summaries from successive moving and stopped GPS fixes and sends `devices`, `trips`, and `alerts` to the dashboard. Optional `GEOFENCE="28.6205,77.3658,2"` generates a geofence-exit alert (latitude, longitude, radius in km). It keeps locations, trips, and alerts in memory, so all history resets after restart. Trip addresses are coordinate strings until reverse geocoding is added. Protect both API and device network path; use host firewall restrictions where possible.
 
-**Do not switch the installed device yet.** Once its terminal identity and reachable public TCP host are established, the MT100 manual gives SMS patterns `PROTOCOL,2,1#` to select JT808 on IP1 and `IP,HOST,PORT,1#` to set primary TCP destination. Query existing settings with `PROTOCOL#` and `*11*3#` first, and plan a rollback before changing its existing tracking service. Send SMS only from an authorized phone or via the vendor's configuration tool. No command was sent during this build.
+**Do not send the Kingwo SMS configuration to a device identified only by the TrackingTheWorld MT-100 datasheet.** Its @Track packet layouts and configuration commands are not supplied. Identify the installed unit and obtain its matching full protocol/configuration guide first.
 
 ## Scope and validation
 

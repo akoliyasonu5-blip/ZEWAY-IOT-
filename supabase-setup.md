@@ -7,3 +7,5 @@ The dashboard uses email/password authentication. Device and vehicle records bel
 The existing device registry is saved in the current browser; after signing in, use **Sync this browser's devices** to upload its records. Adding/editing/removing a device while signed in writes to Supabase. A registered device appears offline until a GPS fix reaches the database. Physical lock/unlock is disabled outside sample mode.
 
 Supabase cannot listen for the MT100's raw JT808 TCP connection. The receiver needs a separate public TCP host. The GitHub Pages site is the frontend.
+
+On the TCP receiver host, set `SUPABASE_URL=https://wllrbpxmfhbdobexiswl.supabase.co` and `SUPABASE_SECRET_KEY` using the project's server-only secret key, along with `TERMINAL_IDS` and `API_TOKEN`. The receiver checks whether each JT808 terminal ID is registered to an account and writes its valid GPS fixes as that owner's positions. The dashboard reads them every ten seconds. The IMEI-only entry must be edited to include the device's actual JT808 terminal ID before a fix can be linked.

@@ -1,3 +1,5 @@
+> **Hardware mismatch:** This guide applies only to a Kingwo MT100 confirmed to support JT/T 808. The supplied TrackingTheWorld MT-100 datasheet says @Track; do not follow the JT/T 808 SMS steps for that unit. Identify the installed tracker and obtain its protocol guide first.
+
 # Free MT100 GPS test from a Windows PC
 
 Railway is currently blocked by its expired trial. This alternative uses a Windows PC that stays on, a free Playit **UDP** tunnel, the MT100's documented UDP mode, and the ZEWAY IOT Supabase project. Playit free does **not** include a custom TCP tunnel.

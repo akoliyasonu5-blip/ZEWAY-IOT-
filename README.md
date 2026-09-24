@@ -1,8 +1,9 @@
 # ZEWAY IoT fleet dashboard
 
-- `dist/index.html`: Dashboard for GitHub Pages. It includes sample data, device and vehicle registration, trips, alerts, and a location map.
-- `receiver/`: JT/T 808 TCP receiver and HTTPS JSON API. Deploy it to a service with **public inbound TCP** and an HTTPS reverse proxy. GitHub Pages and Actions cannot keep a TCP listener running.
+- `dist/index.html`: Real-data-only dashboard for GitHub Pages with vehicle registration, interactive fleet map, GPS history routes and daily trip estimates. Empty devices and maps stay empty until data arrives.
+- `receiver/`: MT100 JT/T 808 TCP and optional UDP receiver. It can publish valid GPS points to Supabase for the signed-in owner's dashboard. Another tracker protocol needs its own decoder or vendor HTTP gateway; registering a model does not automatically decode it.
 - Configure GitHub repository **Settings → Pages → Build and deployment → GitHub Actions**; push this repository to `main`. The workflow publishes `dist`.
-- Dashboard URL stays online as a website. It shows actual GPS positions only after the receiver is deployed and MT100 is configured to send its JT/T 808 packets to it.
-- Vehicles saved in the dashboard are held in that browser's local storage; they are not shared across browsers. The MT100 receiver returns live GPS and derived trips once connected.
-- Lock/unlock is a demo interaction. It cannot physically actuate the installed scooter until wiring, firmware command format, and stationary-only checks are verified.
+- The dashboard is online at https://akoliyasonu5-blip.github.io/ZEWAY-IOT-/ . It displays actual GPS positions only after a compatible receiver is running and the tracker sends it packets. GitHub Pages itself does not accept raw TCP or UDP tracker packets.
+- Vehicles added while signed in under **Supabase** persist for that account. Without sign-in they stay in browser storage. Device IDs may use 6–64 letters, numbers, underscores, hyphens or colons. IMEI-only entries need a corresponding protocol ID before MT100 JT808 GPS can be linked.
+- Dashboard tracking uses stored positions for the selected day, draws route lines, and derives trip summaries from real GPS reports. Distances are GPS estimates; the daily query currently includes up to the first 1,000 points.
+- Physical lock/unlock buttons remain disabled until the specific hardware and its safe command flow are verified.

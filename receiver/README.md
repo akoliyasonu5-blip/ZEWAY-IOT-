@@ -17,3 +17,7 @@ Set `TERMINAL_IDS` to the 12- or 20-digit terminal identity used in JT808 messag
 ## Scope and validation
 
 Run `npm test` for framing and sample location decoding. A synthetic packet test does **not** prove interoperability with this device's firmware. Capture the first raw packet on the configured TCP port to verify exact terminal ID, header variant, registration response and location fields. Until the receiver obtains a valid GPS packet, the dashboard correctly displays no live position. Battery percentage is not available in the basic 0x0200 packet. The 9–100 V power input in the manual should not be interpreted as scooter battery state of charge.
+
+## GT800 is a different wire format
+
+The Kingwo MT100 user manual lists `PROTOCOL,3,1#` to select GT800 on primary IP, `IP,<host>,<port>,1#` for primary TCP, and `PROTOCOL#` to query. It does **not** provide a GT800 report frame layout, sample ASCII packet, checksum or acknowledgement. Port 5095 is not specified there. This receiver will not show GT800 GPS positions until a verified decoder is implemented. `*11*2#` queries longitude/latitude and does not reset the unit; factory reset is `*22*1#` and must not be used as a diagnostic. Preserve existing tracker settings until a reachable compatible server and device identity are confirmed.

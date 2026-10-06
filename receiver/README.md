@@ -1,27 +1,80 @@
-# ZEWAY receiver (JT/T 808 mode and JSON GPS)
+# ZEWAY multi-device GPS receiver
 
-A previously supplied Kingwo IoT MT100 manual identifies three switchable modes: Kingwo, JT808, GT800. **A separately supplied TrackingTheWorld MT-100 datasheet instead identifies @Track. This JT/T 808 decoder is not compatible with @Track without a new adapter. Verify the exact installed hardware and protocol before configuring it.** This service implements the **JT/T 808 basic location packet** (0x0200), registration (0x0100), authentication (0x0102), heartbeat (0x0002), and general responses (0x8001). It accepts 2013 (12-digit) and 2019 (20-digit) terminal headers, but does not support fragmented packets, multimedia, or remote control. No scooter lock/unlock action is implemented.
+This receiver is designed for multiple GPS trackers at the same time.
 
-## Run
+## Current live inputs
 
-Use a host with a **public inbound raw TCP port** (for the device) and HTTPS for the browser API. Typical static site hosting and HTTP-only web services cannot receive MT100's raw TCP stream. Configure a TCP reverse proxy or host firewall for `TCP_PORT` and HTTPS reverse proxy for `PORT`.
+- **JT/T 808** over TCP, and optionally UDP.
+- **Generic HTTPS/HTTP JSON** vendor webhook through `POST /api/ingest` or `POST /api/positions`.
+- Multiple device IDs can report concurrently. Each device keeps its own latest position, history, trip state, protocol and last-seen connection.
+- The dashboard receives receiver-mode positions through the real-time SSE endpoint `/api/stream`.
+
+A GPS model name or IMEI alone is not enough to decode every manufacturer's raw packets. BeeVe Elevate, GT06 and Kingwo/UPro need their verified packet specification/adapter before their raw TCP payload can be decoded. The receiver exposes these as adapter-required through `GET /api/protocols`.
+
+## Recommended onboarding flow
+
+1. Deploy this receiver on a server that can accept the tracker's TCP/UDP traffic and expose the HTTP API through HTTPS.
+2. Set a strong `API_TOKEN`.
+3. Temporarily set `AUTO_REGISTER=true` while adding new authorized devices.
+4. Point each GPS tracker to the receiver host and correct port/protocol.
+5. Check `GET /api/devices`. A reporting device appears with its device ID, protocol, transport and last-seen time.
+6. After all expected IDs are known, put them into `TERMINAL_IDS=id1,id2,id3` and set `AUTO_REGISTER=false`.
+7. Connect the GitHub dashboard to `https://YOUR-RECEIVER/api/devices` with the same API token.
+
+Do not leave auto-registration enabled on an unrestricted public receiver longer than necessary.
+
+## Environment
 
 ```sh
-API_TOKEN='choose-a-long-random-secret' TERMINAL_IDS='YOUR_12_DIGIT_JT808_TERMINAL_ID' TCP_PORT=7008 PORT=3000 node server.js
+API_TOKEN='use-a-long-random-secret'
+AUTO_REGISTER=true
+TCP_PORT=7008
+PORT=3000
+node server.js
 ```
 
-Set `TERMINAL_IDS` to the 12- or 20-digit terminal identity used in JT808 messages, which may be different from the 15-digit IMEI printed on the device. The dashboard needs `https://YOUR_HOST/api/devices` and the same API token. The server creates trip summaries from successive moving and stopped GPS fixes and sends `devices`, `trips`, and `alerts` to the dashboard. Optional `GEOFENCE="28.6205,77.3658,2"` generates a geofence-exit alert (latitude, longitude, radius in km). It keeps locations, trips, and alerts in memory, so all history resets after restart. Trip addresses are coordinate strings until reverse geocoding is added. Protect both API and device network path; use host firewall restrictions where possible.
+Optional:
 
-**Do not send the Kingwo SMS configuration to a device identified only by the TrackingTheWorld MT-100 datasheet.** Its @Track packet layouts and configuration commands are not supplied. Identify the installed unit and obtain its matching full protocol/configuration guide first.
+```sh
+UDP_PORT=7008
+TERMINAL_IDS='DEVICE001,DEVICE002,DEVICE003'
+GEOFENCE='28.6205,77.3658,2'
+SUPABASE_URL='https://YOUR_PROJECT.supabase.co'
+SUPABASE_SECRET_KEY='SERVER_ONLY_SECRET'
+```
 
-## Scope and validation
+When `AUTO_REGISTER=false`, only IDs in `TERMINAL_IDS` or IDs registered at runtime through the authenticated `POST /api/register` endpoint are accepted.
 
-Run `npm test` for framing and sample location decoding. A synthetic packet test does **not** prove interoperability with this device's firmware. Capture the first raw packet on the configured TCP port to verify exact terminal ID, header variant, registration response and location fields. Until the receiver obtains a valid GPS packet, the dashboard correctly displays no live position. Battery percentage is not available in the basic 0x0200 packet. The 9–100 V power input in the manual should not be interpreted as scooter battery state of charge.
+## Generic vendor webhook
 
-## GT800 is a different wire format
+Supported common aliases include `device_id`, `deviceId`, `imei`, `terminal_id`; `lat/latitude`; `lng/lon/longitude`; and `timestamp/time/gps_time`.
 
-The Kingwo MT100 user manual lists `PROTOCOL,3,1#` to select GT800 on primary IP, `IP,<host>,<port>,1#` for primary TCP, and `PROTOCOL#` to query. It does **not** provide a GT800 report frame layout, sample ASCII packet, checksum or acknowledgement. Port 5095 is not specified there. This receiver will not show GT800 GPS positions until a verified decoder is implemented. `*11*2#` queries longitude/latitude and does not reset the unit; factory reset is `*22*1#` and must not be used as a diagnostic. Preserve existing tracker settings until a reachable compatible server and device identity are confirmed.
+Example:
 
-Traccar independently lists Kingwo MT100 as `upro` on port 5095, and Concox GT800 as `gt06` on 5023; those are different protocol mappings, so the pasted `0x7878` GT06-like code cannot be assumed to support the Kingwo device in its current mode. A third-party Kingwo decoder and parsed-data API is documented by flespi. Both paths still require the tracker to be pointed to a compatible reachable server and need a real packet test before reporting a ZEWAY live location.
+```json
+{
+  "imei": "867530900000001",
+  "latitude": 28.6139,
+  "longitude": 77.2090,
+  "speed": 21.4,
+  "timestamp": "2026-10-06T06:30:00Z",
+  "ignition": true,
+  "protocol": "beeve-http"
+}
+```
 
-For a controlled wire-format check, `python3 protocol_probe.py 8090` records the first 128 bytes of each TCP read as hex, with a best-effort prefix label. The probe **never replies or decodes GPS**, so it is not a live tracking server. TCP reads can split or combine device packets; use a full vendor frame specification before building an acknowledgement or location parser. Only use this on an authorized reachable host, keep logs private (they can contain device IDs), and never publish unredacted captures or server credentials. The proposed `SERVER,1,...#` and `HEARTBEAT,3#` commands are absent from the supplied Kingwo manual and should not be sent on that basis.
+Send it to `POST /api/ingest` with header `Authorization: Bearer YOUR_API_TOKEN`.
+
+## API
+
+- `GET /health` — receiver health.
+- `GET /api/devices` — all currently known devices, connections, trips and alerts.
+- `GET /api/protocols` — ready and adapter-required protocols.
+- `GET /api/history/:deviceId` — in-memory history for one device.
+- `GET /api/stream?token=...` — real-time GPS events for the browser dashboard.
+- `POST /api/register` — add a device ID at runtime.
+- `POST /api/ingest` — normalized vendor/webhook GPS input.
+
+## Protocol rule
+
+One server can support many manufacturers, but each raw binary/text wire protocol still needs a decoder that is based on the vendor's real protocol document or verified packet capture. Do not guess acknowledgement/control frames. This is especially important for immobilization/lock commands.

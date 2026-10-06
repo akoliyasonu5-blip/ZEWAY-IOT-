@@ -6,11 +6,12 @@ const sbSecret=process.env.SUPABASE_SECRET_KEY;
 function deviceAllowed(id){return allowed.has(String(id))||autoRegister}
 function noteConnection(id,protocol,transport,remote=''){connections.set(String(id),{deviceId:String(id),protocol,transport,remote,lastSeen:new Date().toISOString()});if(autoRegister)allowed.add(String(id))}
 function validPosition(body){
- const id=String(body.device_id??body.id??'');
- const lat=Number(body.lat),lng=Number(body.lng),speed=body.speed==null?0:Number(body.speed);
- const timestamp=body.recorded_at??body.timestamp??new Date().toISOString();
+ const src=body?.location&&typeof body.location==='object'?{...body,...body.location}:body||{};
+ const id=String(src.device_id??src.deviceId??src.imei??src.terminal_id??src.id??'').trim();
+ const lat=Number(src.lat??src.latitude),lng=Number(src.lng??src.lon??src.longitude),speed=src.speed==null?(src.gps_speed==null?0:Number(src.gps_speed)):Number(src.speed);
+ const timestamp=src.recorded_at??src.timestamp??src.time??src.gps_time??new Date().toISOString();
  if(!deviceAllowed(id)||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180||(lat===0&&lng===0)||!Number.isFinite(speed)||speed<0||speed>500||!Number.isFinite(Date.parse(timestamp)))return null;
- return {id,lat,lng,speed,timestamp:new Date(timestamp).toISOString(),voltage:body.voltage==null?null:Number(body.voltage),ignition:body.ignition==null?null:!!body.ignition,protocol:String(body.protocol||'http')};
+ return {id,lat,lng,speed,timestamp:new Date(timestamp).toISOString(),voltage:src.voltage==null?(src.battery_voltage==null?null:Number(src.battery_voltage)):Number(src.voltage),ignition:src.ignition==null?(src.acc==null?null:!!src.acc):!!src.ignition,protocol:String(src.protocol||src.vendor||'http')};
 }
 function broadcastPosition(pos){
  const payload='data: '+JSON.stringify({type:'position',position:pos})+'\n\n';
@@ -102,7 +103,7 @@ http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');r
   req.on('close',()=>{clearInterval(ping);sseClients.delete(res)});
   return
  }
- if(req.headers.authorization!==`Bearer ${token}`){res.writeHead(401).end(JSON.stringify({error:'Unauthorized'}));return}if(req.url==='/api/positions'&&req.method==='POST'){
+ if(req.headers.authorization!==`Bearer ${token}`){res.writeHead(401).end(JSON.stringify({error:'Unauthorized'}));return}if((req.url==='/api/positions'||req.url==='/api/ingest')&&req.method==='POST'){
  let raw='';req.on('data',chunk=>{raw+=chunk;if(raw.length>8192)req.destroy()});req.on('end',()=>{let body;try{body=JSON.parse(raw)}catch{res.writeHead(400).end(JSON.stringify({error:'Invalid JSON'}));return}const pos=validPosition(body);if(!pos){res.writeHead(400).end(JSON.stringify({error:'Unknown device or invalid GPS position'}));return}noteConnection(pos.id,pos.protocol||'http','http',req.socket.remoteAddress||'');devices.set(pos.id,pos);tripTracker.record(pos);broadcastPosition(pos);const list=history.get(pos.id)||[];list.push(pos);history.set(pos.id,list.slice(-1000));void publishPosition(pos);res.writeHead(202).end(JSON.stringify({accepted:true,device_id:pos.id}))});return}
  if(req.url==='/api/devices'){res.end(JSON.stringify({devices:[...devices.values()].map(d=>({...d,connection:connections.get(String(d.id))||null})),connections:[...connections.values()],trips:tripTracker.getTrips(),alerts:tripTracker.getAlerts(),autoRegister}));return}
  if(req.url==='/api/protocols'){res.end(JSON.stringify({supported:[{id:'jt808',transports:['tcp','udp'],status:'ready'},{id:'http-json',transports:['https'],status:'ready'},{id:'beeve-elevate',transports:['tcp','mqtt','http','https'],status:'adapter-required'},{id:'gt06',transports:['tcp','udp'],status:'adapter-required'},{id:'kingwo-upro',transports:['tcp'],status:'adapter-required'}]}));return}

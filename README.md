@@ -1,7 +1,7 @@
 # ZEWAY IoT fleet dashboard
 
 - `dist/index.html`: Real-data-only dashboard for GitHub Pages with vehicle registration, interactive fleet map, GPS history routes and daily trip estimates. Empty devices and maps stay empty until data arrives.
-- `receiver/`: JT/T 808 TCP/UDP decoder and an authenticated JSON GPS endpoint. It can publish valid GPS points to Supabase. **The supplied TrackingTheWorld MT-100 datasheet specifies @Track, not JT/T 808; this decoder is not verified for that device.**
+- `receiver/`: Multi-device receiver. It accepts multiple JT/T 808 TCP/UDP trackers concurrently plus normalized HTTP/HTTPS vendor webhooks, exposes per-device protocol/connection status, and streams positions to the dashboard in real time. Vendor-specific raw protocols still require a verified adapter.
 - Configure GitHub repository **Settings → Pages → Build and deployment → GitHub Actions**; push this repository to `main`. The workflow publishes `dist`.
 - The dashboard is online at https://akoliyasonu5-blip.github.io/ZEWAY-IOT-/ . It displays actual GPS positions only after a compatible receiver is running and the tracker sends it packets. GitHub Pages itself does not accept raw TCP or UDP tracker packets.
 - Vehicles added while signed in under **Supabase** persist for that account. Without sign-in they stay in browser storage. Device IDs may use 6–64 letters, numbers, underscores, hyphens or colons. IMEI-only entries need a matching identifier from the incoming protocol before GPS can be linked.
@@ -25,3 +25,8 @@ The **Kingwo MT100(User Manual)_2022.pdf**, section 4.2.3, allows GT800 on prima
 ## Existing Kingwo protocol integrations
 
 Traccar's [supported-device list](https://www.traccar.org/devices) lists **Kingwo MT100** under its `upro` decoder on TCP port **5095**. That is a Traccar port assignment, not proof that an MT100 switched to the GT800 mode speaks `upro`; Traccar lists Concox GT800 separately as `gt06` on port **5023**. The Kingwo MT100 must be configured to report to a running compatible server before it can appear in ZEWAY. [flespi's Kingwo integration](https://flespi.com/protocols/kingwo) offers parsed JSON through REST/MQTT after the device is pointed to a Kingwo channel; that is a separate external service. Neither connection has been configured or verified for this physical device, and the ZEWAY receiver does not yet consume those feeds.
+
+
+## Multi-device onboarding
+
+Use `AUTO_REGISTER=true` only while onboarding authorized trackers. As devices report, their IDs appear in `/api/devices`. After onboarding, copy the expected IDs into `TERMINAL_IDS` and turn auto-registration off. Multiple trackers can stay connected to the same receiver at the same time. HTTP-capable vendors can post common IMEI/GPS field names to `/api/ingest`; JT/T 808 trackers use the raw TCP/UDP listener. Unknown vendor wire formats require an adapter based on their protocol documentation.

@@ -30,3 +30,12 @@ Traccar's [supported-device list](https://www.traccar.org/devices) lists **Kingw
 ## Multi-device onboarding
 
 Use `AUTO_REGISTER=true` only while onboarding authorized trackers. As devices report, their IDs appear in `/api/devices`. After onboarding, copy the expected IDs into `TERMINAL_IDS` and turn auto-registration off. Multiple trackers can stay connected to the same receiver at the same time. HTTP-capable vendors can post common IMEI/GPS field names to `/api/ingest`; JT/T 808 trackers use the raw TCP/UDP listener. Unknown vendor wire formats require an adapter based on their protocol documentation.
+
+## Live integration added (BeeVe API + Kingwo HQ20)
+
+The receiver now supports both documents supplied for this project:
+
+- **BeeVe Global Vehicle Tracking API**: set `BEEVE_CLIENT_ID` and `BEEVE_CLIENT_SECRET` on the private receiver server. The receiver obtains and reuses the bearer token, then polls `/v1/locations` no faster than every 30 seconds. BeeVe vehicle location, speed, heading, ignition, voltage, device battery, odometer, immobilizer and wheel-lock values are normalized into the ZEWAY dashboard feed.
+- **Kingwo hard-wired tracker protocol**: set `KINGWO_TCP_PORT` (for example `7100`). The receiver accepts `*HQ20...#` TCP packets, decodes the Code-B / Keyword-A location upload and the additional GPS/status/voltage/mileage fields, and publishes them to the dashboard. Device IDs still follow `TERMINAL_IDS` unless `AUTO_REGISTER=true` is temporarily enabled during onboarding.
+
+For BeeVe production access, the API document says the real `CLIENT_ID` and `CLIENT_SECRET` are supplied separately and the receiver server's public IP must be allowlisted. Do not commit those credentials to GitHub. For a direct Kingwo connection, point the physical tracker to the public TCP host/port of the deployed receiver only after the exact device configuration method is confirmed.

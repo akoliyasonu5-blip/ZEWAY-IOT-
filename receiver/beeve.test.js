@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {normalizeBeeVeVehicle} from './beeve.js';
+test('normalizes BeeVe location',()=>{const v=normalizeBeeVeVehicle({vehicleId:104,registrationNumber:'DL02CD0012',latitude:28.63648,longitude:77.31446,speed:0,heading:358,ignition:1,status:'IDLE',pingTime:'2026-10-12T15:29:36Z',wheelLock:'UNKNOWN',immobilizer:'UNKNOWN',deviceBatteryPercent:100,odometerKm:1550.8});assert.equal(v.id,'104');assert.equal(v.ignition,true);assert.equal(v.battery,100);});

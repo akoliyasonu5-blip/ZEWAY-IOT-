@@ -112,6 +112,38 @@ if(process.env.KINGWO_TCP_PORT){
  });
  kingwoTcp.listen(kingwoPort,'0.0.0.0',()=>console.log('Kingwo HQ20 TCP receiver on',kingwoPort));
 }
+// Kingwo *HQ20 over UDP. This is useful for free UDP tunnels (for example Playit) when TCP proxy hosting is unavailable.
+if(process.env.KINGWO_UDP_PORT){
+ const kingwoUdpPort=Number(process.env.KINGWO_UDP_PORT);
+ if(!Number.isInteger(kingwoUdpPort)||kingwoUdpPort<1||kingwoUdpPort>65535)throw Error('Invalid KINGWO_UDP_PORT');
+ const kingwoUdp=dgram.createSocket('udp4');
+ kingwoUdp.on('message',(packet,remote)=>{
+  if(packet.length>MAX_FRAME*4)return;
+  const text=packet.toString('ascii');
+  let cursor=0;
+  while(cursor<text.length){
+   const start=text.indexOf('*HQ20',cursor);if(start<0)break;
+   const end=text.indexOf('#',start+5);if(end<0)break;
+   const frame=text.slice(start,end+1);cursor=end+1;
+   try{
+    const msg=parseKingwo(frame);
+    if(!deviceAllowed(msg.id)){console.warn('Unregistered Kingwo terminal:',msg.id);continue}
+    noteConnection(msg.id,'kingwo-hq20','udp',remote.address+':'+remote.port);
+    if(msg.responseRequired){
+     const response=Buffer.from(kingwoAck(msg),'ascii');
+     kingwoUdp.send(response,remote.port,remote.address);
+    }
+    if(isKingwoPosition(msg)&&msg.gpsValid!==false){
+     const pos={...msg,timestamp:msg.timestamp||new Date().toISOString()};
+     delete pos.raw;delete pos.responseRequired;delete pos.code;delete pos.keyword;delete pos.gpsValid;
+     storePosition(pos);
+    }
+   }catch(err){console.warn('Invalid Kingwo UDP frame:',err.message)}
+  }
+ });
+ kingwoUdp.on('error',err=>console.warn('Kingwo UDP receiver:',err.message));
+ kingwoUdp.bind(kingwoUdpPort,'0.0.0.0',()=>console.log('Kingwo HQ20 UDP receiver on',kingwoUdpPort));
+}
 // Set UDP_PORT=7008 to use a free Playit UDP tunnel from an always-on PC.
 if(process.env.UDP_PORT){
  const udpPort=Number(process.env.UDP_PORT);
